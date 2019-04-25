@@ -258,7 +258,7 @@ ActiveRecord::Base.transaction do
         SeedMigration.registrar.each do |register_entry|
           if SeedMigration.use_activerecord_import?
             file.write <<-eos
-#{register_entry.model}.import([
+  #{register_entry.model}.import([
             eos
           end
           register_entry.model.order('id').each do |instance|
@@ -266,7 +266,7 @@ ActiveRecord::Base.transaction do
           end
           if SeedMigration.use_activerecord_import?
             file.write <<-eos
-])
+  ])
             eos
           end
 
@@ -301,7 +301,7 @@ SeedMigration::Migrator.bootstrap(#{last_migration})
       end
 
       if SeedMigration.use_activerecord_import?
-        model_creation_string += ','
+        model_creation_string = "  #{model_creation_string},"
       end
 
       # With pretty indents, please.
