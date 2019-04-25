@@ -313,7 +313,7 @@ SeedMigration::Migrator.bootstrap(#{last_migration})
 
     def self.create_method
       if SeedMigration.use_activerecord_import?
-        'build'
+        'new'
       else
         SeedMigration.use_strict_create? ? 'create!' : 'create'
       end
