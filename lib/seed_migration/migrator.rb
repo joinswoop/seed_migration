@@ -258,7 +258,7 @@ ActiveRecord::Base.transaction do
         SeedMigration.registrar.each do |register_entry|
           if SeedMigration.use_activerecord_import?
             file.write <<-eos
-#{register_entry.model.class}.import([
+#{register_entry.model}.import([
             eos
           end
           register_entry.model.order('id').each do |instance|
