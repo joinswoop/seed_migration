@@ -254,9 +254,20 @@ module SeedMigration
 
 ActiveRecord::Base.transaction do
         eos
+
         SeedMigration.registrar.each do |register_entry|
+          if SeedMigration.use_activerecord_import?
+            file.write <<-eos
+#{register_entry.model.class}.import([
+            eos
+          end
           register_entry.model.order('id').each do |instance|
             file.write generate_model_creation_string(instance, register_entry)
+          end
+          if SeedMigration.use_activerecord_import?
+            file.write <<-eos
+])
+            eos
           end
 
           if !SeedMigration.ignore_ids
@@ -289,6 +300,10 @@ SeedMigration::Migrator.bootstrap(#{last_migration})
         model_creation_string = "#{instance.class}.#{create_method}(#{JSON.parse(sorted_attributes.to_json)})"
       end
 
+      if SeedMigration.use_activerecord_import?
+        model_creation_string += ','
+      end
+
       # With pretty indents, please.
       return <<-eos
 
@@ -297,7 +312,11 @@ SeedMigration::Migrator.bootstrap(#{last_migration})
     end
 
     def self.create_method
-      SeedMigration.use_strict_create? ? 'create!' : 'create'
+      if SeedMigration.use_activerecord_import?
+        'build'
+      else
+        SeedMigration.use_strict_create? ? 'create!' : 'create'
+      end
     end
 
     class PendingMigrationError < StandardError
