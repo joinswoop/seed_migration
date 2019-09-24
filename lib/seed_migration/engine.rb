@@ -11,7 +11,7 @@ module SeedMigration
   mattr_accessor :migrations_path
   mattr_accessor :use_strict_create
   mattr_accessor :use_activerecord_import
-  mattr_accessor :force_instance_type
+  mattr_accessor :force_migration_instance_folders
 
   self.migration_table_name = DEFAULT_TABLE_NAME
   self.extend_native_migration_task = false
@@ -20,7 +20,7 @@ module SeedMigration
   self.migrations_path = 'data'
   self.use_strict_create = false
   self.use_activerecord_import = false
-  self.force_instance_type = false
+  self.force_migration_instance_folders = false
 
   def self.config
     yield self
@@ -39,6 +39,10 @@ module SeedMigration
 
   def self.use_activerecord_import?
     use_activerecord_import
+  end
+
+  def self.force_migration_instance_folders?
+    force_migration_instance_folders
   end
 
   class Engine < ::Rails::Engine

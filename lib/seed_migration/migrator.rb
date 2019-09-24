@@ -5,15 +5,25 @@ module SeedMigration
   class Migrator
     SEEDS_FILE_PATH = Rails.root.join('db', 'seeds.rb')
 
-    def self.data_migration_directory(app_instance_name = nil)
+    def self.data_migration_directory(migration_instance_folder = nil)
       base_folder = "db" # TODO it should also be configurable
-      path_array = [base_folder, SeedMigration.migrations_path, app_instance_name].compact
+      instance_folder = begin
+        if migration_instance_folder
+          if migration_instance_folder == 'data'
+            ''
+          else
+            migration_instance_folder
+          end
+        end
+      end
+
+      path_array = [base_folder, SeedMigration.migrations_path, instance_folder].compact
 
       Rails.root.join(*path_array)
     end
 
-    def self.migration_path(filename, app_instance_name = nil)
-      data_migration_directory(app_instance_name).join(filename).to_s
+    def self.migration_path(filename, migration_instance_folder = nil)
+      data_migration_directory(migration_instance_folder).join(filename).to_s
     end
 
     def initialize(migration_path)
@@ -79,29 +89,33 @@ module SeedMigration
     end
 
     # Rake methods
-    def self.run_new_migrations(app_instance_name = nil)
+    def self.run_new_migrations(migration_instance_folder = nil)
       # TODO : Add warning about empty registered_models
-      get_new_migrations(app_instance_name).each do |migration|
-        migration = migration_path(migration, app_instance_name)
+      get_new_migrations(migration_instance_folder).each do |migration|
+        migration = migration_path(migration, migration_instance_folder)
         new(migration).up
       end
     end
 
-    def self.get_app_instance_names
-      ENV['app_instance_names']&.gsub(/\s+/, "")&.split(",") || []
+    def self.get_migration_instance_folders
+      ENV['migration_instance_folders']&.gsub(/\s+/, "")&.split(",") || []
+    end
+
+    def self.get_migration_instance_folder
+      ENV['migration_instance_folder']&.strip || ''
     end
 
     def self.run_migrations(filename = nil)
-      app_instance_names = get_app_instance_names
+      migration_instance_folders = get_migration_instance_folders
 
-      if SeedMigration.force_instance_type
-        if app_instance_names.empty?
-          raise ArgumentError, "You must pass the app_instance_names param, e.g. seed:migrate app_instance_names=swoop_us,swoop_adac"
+      if SeedMigration.force_migration_instance_folders?
+        if migration_instance_folders.empty?
+          raise ArgumentError, "You must pass the migration_instance_folders param, e.g. seed:migrate migration_instance_folders=swoop_us,swoop_adac"
         else
-          p "Migrations will be loaded for these app instance names: #{app_instance_names}"
+          p "Migrations will be loaded for these app instance names: #{migration_instance_folders.inspect}"
 
-          app_instance_names.each do |app_instance_name|
-            load_files_and_run_migrations(filename, app_instance_name)
+          migration_instance_folders.each do |migration_instance_folder|
+            load_files_and_run_migrations(filename, migration_instance_folder)
           end
         end
       else
@@ -111,12 +125,12 @@ module SeedMigration
       create_seed_file
     end
 
-    def self.load_files_and_run_migrations(filename, app_instance_name = nil)
+    def self.load_files_and_run_migrations(filename, migration_instance_folder = nil)
       if filename.blank?
         # Run any outstanding migrations
-        run_new_migrations(app_instance_name)
+        run_new_migrations(migration_instance_folder)
       else
-        path = self.migration_path(filename, app_instance_name) # TODO pass app_instance_name
+        path = self.migration_path(filename, migration_instance_folder) # TODO pass migration_instance_folder
         new(path).up
       end
     end
@@ -126,32 +140,32 @@ module SeedMigration
     end
 
     def self.rollback_migrations(filename = nil, steps = 1)
-      app_instance_names = get_app_instance_names
+      migration_instance_folders = get_migration_instance_folders
 
-      if SeedMigration.force_instance_type
-        if app_instance_names.empty?
-          raise ArgumentError, "You must pass the app_instance_names param, e.g. seed:rollback app_instance_names=swoop_us,swoop_adac"
+      if SeedMigration.force_migration_instance_folders?
+        if migration_instance_folders.empty?
+          raise ArgumentError, "You must pass the migration_instance_folders param, e.g. seed:rollback migration_instance_folders=swoop_us,swoop_adac"
         else
-          app_instance_names.each do |app_instance_name|
-            load_files_and_run_rollback(filename, steps, app_instance_name)
+          migration_instance_folders.each do |migration_instance_folder|
+            load_files_and_run_rollback(filename, steps, migration_instance_folder)
           end
         end
       else
-        load_files_and_run_rollback(filename, steps, app_instance_name)
+        load_files_and_run_rollback(filename, steps, migration_instance_folder)
       end
 
       create_seed_file
     end
 
-    def self.load_files_and_run_rollback(filename, steps, app_instance_name)
+    def self.load_files_and_run_rollback(filename, steps, migration_instance_folder)
       if filename.blank?
-        to_run = get_last_x_migrations(steps, app_instance_name)
+        to_run = get_last_x_migrations(steps, migration_instance_folder)
 
         to_run.each do |migration|
           new(migration).down
         end
       else
-        path = migration_path(filename) # TODO pass app_instance_name
+        path = migration_path(filename) # TODO pass migration_instance_folder
         new(path).down
       end
     end
@@ -206,9 +220,9 @@ module SeedMigration
       SeedMigration::Migrator.logger.info "== %s %s" % [text, "=" * length]
     end
 
-    def self.get_new_migrations(app_instance_name = nil)
+    def self.get_new_migrations(migration_instance_folder = nil)
       migrations = []
-      files = get_migration_files(nil, app_instance_name)
+      files = get_migration_files(nil, migration_instance_folder)
 
       # If there is no last migration, all migrations are new
       if get_last_migration_date.nil?
@@ -231,13 +245,13 @@ module SeedMigration
       return migrations
     end
 
-    def self.get_last_x_migrations(x = 1, app_instance_name = nil)
+    def self.get_last_x_migrations(x = 1, migration_instance_folder = nil)
       # Grab data from DB
       migrations = SeedMigration::DataMigration.order("version DESC").limit(x).pluck("version")
 
       # Get actual files to load
       to_rollback = []
-      files = get_migration_files(nil, app_instance_name)
+      files = get_migration_files(nil, migration_instance_folder)
 
       migrations.each do |migration|
         files.each do |file|
@@ -255,8 +269,8 @@ module SeedMigration
       DateTime.parse(last_migration)
     end
 
-    def self.get_migration_files(last_timestamp = nil, app_instance_name = nil)
-      files = Dir.glob(migration_path("*_*.rb", app_instance_name))
+    def self.get_migration_files(last_timestamp = nil, migration_instance_folder = nil)
+      files = Dir.glob(migration_path("*_*.rb", migration_instance_folder))
       if last_timestamp.present?
         files.delete_if do |file|
           timestamp = File.basename(file).split('_').first
