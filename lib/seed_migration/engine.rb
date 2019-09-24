@@ -11,6 +11,7 @@ module SeedMigration
   mattr_accessor :migrations_path
   mattr_accessor :use_strict_create
   mattr_accessor :use_activerecord_import
+  mattr_accessor :force_instance_type
 
   self.migration_table_name = DEFAULT_TABLE_NAME
   self.extend_native_migration_task = false
@@ -19,6 +20,7 @@ module SeedMigration
   self.migrations_path = 'data'
   self.use_strict_create = false
   self.use_activerecord_import = false
+  self.force_instance_type = false
 
   def self.config
     yield self
