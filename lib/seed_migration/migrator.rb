@@ -10,7 +10,7 @@ module SeedMigration
     SEEDS_BASE_PATH = 'db'
 
     def self.data_migration_directory(seeds_directory = nil)
-      data_or_specific_seeds_path = begin
+      blank_or_custom_seeds_path = begin
         if seeds_directory
           if seeds_directory == 'data'
             ''
@@ -20,7 +20,7 @@ module SeedMigration
         end
       end
 
-      path_array = [SEEDS_BASE_PATH, SeedMigration.migrations_path, data_or_specific_seeds_path].compact
+      path_array = [SEEDS_BASE_PATH, SeedMigration.migrations_path, blank_or_custom_seeds_path].compact
 
       Rails.root.join(*path_array)
     end
@@ -92,11 +92,24 @@ module SeedMigration
     end
 
     # Rake methods
-    def self.run_new_migrations(seeds_directory = nil)
+    def self.run_new_migrations(seeds_directories = nil)
       # TODO : Add warning about empty registered_models
-      get_new_migrations(seeds_directory).each do |migration|
-        migration = migration_path(migration, seeds_directory)
-        new(migration).up
+      get_new_migrations(seeds_directories).each do |migration|
+        if seeds_directories
+          seeds_directories.each do |seeds_directory|
+            migration_with_path = migration_path(migration, seeds_directory)
+
+            if File.exists? migration_with_path
+              new(migration_with_path).up
+              break
+            else
+              next # try next seeds dir
+            end
+          end
+        else
+          migration_with_path = migration_path(migration)
+          new(migration_with_path).up
+        end
       end
     end
 
@@ -122,9 +135,9 @@ This requirement is currently enabled by SeedMigration.config.seed_by_custom_dir
         else
           logger.info("Seeds will be loaded for these app instance folders: #{seeds_directories.inspect}")
 
-          seeds_directories.each do |seeds_directory|
-            load_files_and_run_migrations(filename, seeds_directory)
-          end
+          # seeds_directories.each do |seeds_directory|
+            load_files_and_run_migrations(filename, seeds_directories)
+          # end
         end
       else
         load_files_and_run_migrations(filename)
@@ -133,12 +146,12 @@ This requirement is currently enabled by SeedMigration.config.seed_by_custom_dir
       create_seed_file
     end
 
-    def self.load_files_and_run_migrations(filename, seeds_directory = nil)
+    def self.load_files_and_run_migrations(filename, seeds_directories = nil)
       if filename.blank?
         # Run any outstanding migrations
-        run_new_migrations(seeds_directory)
+        run_new_migrations(seeds_directories)
       else
-        path = migration_path(filename, seeds_directory)
+        path = migration_path(filename, seeds_directories)
         new(path).up
       end
     end
@@ -228,9 +241,9 @@ This requirement is currently enabled by SeedMigration.config.seed_by_custom_dir
       SeedMigration::Migrator.logger.info "== %s %s" % [text, "=" * length]
     end
 
-    def self.get_new_migrations(seeds_directory = nil)
+    def self.get_new_migrations(seeds_directories = nil)
       migrations = []
-      files = get_migration_files(nil, seeds_directory)
+      files = get_migration_files(nil, seeds_directories)
 
       # If there is no last migration, all migrations are new
       if get_last_migration_date.nil?
@@ -277,8 +290,20 @@ This requirement is currently enabled by SeedMigration.config.seed_by_custom_dir
       DateTime.parse(last_migration)
     end
 
-    def self.get_migration_files(last_timestamp = nil, seeds_directory = nil)
-      files = Dir.glob(migration_path("*_*.rb", seeds_directory))
+    def self.get_migration_files(last_timestamp = nil, seeds_directories = nil)
+      files = nil
+
+      if seeds_directories
+        files_by_folder = []
+        seeds_directories.each do |seed_directory|
+          files_by_folder << Dir.glob(migration_path("*_*.rb", seed_directory))
+        end
+
+        files = files_by_folder.compact.flatten
+      else
+        files = Dir.glob(migration_path("*_*.rb"))
+      end
+
       if last_timestamp.present?
         files.delete_if do |file|
           timestamp = File.basename(file).split('_').first
