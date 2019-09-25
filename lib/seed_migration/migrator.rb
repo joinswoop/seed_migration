@@ -12,7 +12,7 @@ module SeedMigration
     def self.data_migration_directory(seeds_directory = nil)
       blank_or_custom_seeds_path = begin
         if seeds_directory
-          if seeds_directory == 'data'
+          if seeds_directory == SeedMigration.migrations_path
             ''
           else
             seeds_directory
@@ -161,34 +161,18 @@ This requirement is currently enabled by SeedMigration.config.seed_by_custom_dir
     end
 
     def self.rollback_migrations(filename = nil, steps = 1)
-      seeds_directories = get_seeds_directories
-
-      if SeedMigration.seeds_by_custom_directories_enabled?
-        if seeds_directories.empty?
-          p "You must pass the seeds_directories param, e.g. seed:rollback seeds_directories=swoop_us,swoop_adac"
-        else
-          seeds_directories.each do |seeds_directory|
-            load_files_and_run_rollback(filename, steps, seeds_directory)
-          end
-        end
-      else
-        load_files_and_run_rollback(filename, steps)
-      end
-
-      create_seed_file
-    end
-
-    def self.load_files_and_run_rollback(filename, steps, seeds_directory = nil)
       if filename.blank?
-        to_run = get_last_x_migrations(steps, seeds_directory)
+        to_run = get_last_x_migrations(steps)
 
         to_run.each do |migration|
           new(migration).down
         end
       else
-        path = migration_path(filename, seeds_directory)
+        path = migration_path(filename)
         new(path).down
       end
+
+      create_seed_file
     end
 
     def self.display_migrations_status
@@ -266,13 +250,15 @@ This requirement is currently enabled by SeedMigration.config.seed_by_custom_dir
       return migrations
     end
 
-    def self.get_last_x_migrations(x = 1, seeds_directory = nil)
+    def self.get_last_x_migrations(x = 1)
       # Grab data from DB
       migrations = SeedMigration::DataMigration.order("version DESC").limit(x).pluck("version")
 
       # Get actual files to load
       to_rollback = []
-      files = get_migration_files(nil, seeds_directory)
+
+      seeds_directories = get_existent_seeds_directories
+      files = get_migration_files(nil, seeds_directories)
 
       migrations.each do |migration|
         files.each do |file|
@@ -282,7 +268,16 @@ This requirement is currently enabled by SeedMigration.config.seed_by_custom_dir
         end
       end
 
-      return to_rollback
+      to_rollback
+    end
+
+    def self.get_existent_seeds_directories
+      seeds_base_path = Rails.root.join(SEEDS_BASE_PATH, SeedMigration.migrations_path)
+      all_seeds_path = Dir.glob("#{seeds_base_path}/**").select{ |e| File.directory? e }
+      dir_names = [SeedMigration.migrations_path]
+      dir_names << all_seeds_path.map { |path| path.split('/').last }
+
+      dir_names.flatten
     end
 
     def self.get_last_migration_date
