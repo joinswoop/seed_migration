@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'rails'
 
 module SeedMigration
@@ -11,7 +13,7 @@ module SeedMigration
   mattr_accessor :migrations_path
   mattr_accessor :use_strict_create
   mattr_accessor :use_activerecord_import
-  mattr_accessor :force_migration_instance_folders
+  mattr_accessor :seed_by_custom_directories
 
   self.migration_table_name = DEFAULT_TABLE_NAME
   self.extend_native_migration_task = false
@@ -20,7 +22,7 @@ module SeedMigration
   self.migrations_path = 'data'
   self.use_strict_create = false
   self.use_activerecord_import = false
-  self.force_migration_instance_folders = false
+  self.seed_by_custom_directories = false
 
   def self.config
     yield self
@@ -28,7 +30,7 @@ module SeedMigration
   end
 
   def self.after_config
-    if self.extend_native_migration_task
+    if extend_native_migration_task
       require_relative '../extra_tasks.rb'
     end
   end
@@ -41,11 +43,12 @@ module SeedMigration
     use_activerecord_import
   end
 
-  def self.force_migration_instance_folders?
-    force_migration_instance_folders
+  def self.seeds_by_custom_directories_enabled?
+    seed_by_custom_directories
   end
 
   class Engine < ::Rails::Engine
+
     isolate_namespace SeedMigration
 
     config.generators do |g|
@@ -56,4 +59,5 @@ module SeedMigration
     end
 
   end
+
 end
